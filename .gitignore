@@ -1,3 +1,7 @@
 *.gz
 node_modules/
 __pycache__/
+shot-card.js
+demo.html
+package.json
+package-lock.json
