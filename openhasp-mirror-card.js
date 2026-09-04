@@ -1,4 +1,5 @@
-// openhasp-mirror-card.js  v1.0.0
+// openhasp-mirror-card.js  v1.0.1
+// v1.0.1: TTS-Erkennung fuer Music-Assistant-Soundbar (kein Titel/Interpret -> "Sprachansage")
 // v1.0.0: TTS-Ansagetext auf Media-Seite (show_tts_text, UI-Schalter im Editor)
 // v9.9: Companion-App Fix - Container/Viewport-Messung beim Render (Fallback wenn ResizeObserver nicht feuert)
 // v9.5: Responsive canvas_size via ResizeObserver (passt sich an Handy/PC an)
@@ -501,19 +502,19 @@
       if (text == null || text === "") text = obj.text || null;
 
       // TTS-Ansage auf der Media-Seite (p5b11/p5b12):
-      // Wenn der Media-Player gerade eine TTS/Announcement-Ansage spielt
-      // (kein media_title/media_artist), zeige den Ansagetext statt "-".
+      // Der Soundbar ist ein Music-Assistant-Player: TTS-Ansagen haben
+      // media_content_type "music" und KEINEN media_title/media_artist.
+      // Erkennung: Player spielt, aber es gibt keinen Titel -> Ansage.
       if (this._config.show_tts_text && (key === "p5b11" || key === "p5b12")) {
         const mp = this._hass && this._hass.states && this._hass.states[this._config.media_entity];
-        if (mp && mp.attributes) {
-          const ctype = mp.attributes.media_content_type;
-          const isTts = ctype === "tts" || ctype === "announcement" || ctype === "announce";
-          if (isTts) {
-            const ttsText = mp.attributes.media_title || mp.attributes.announcement || mp.attributes.message || "";
-            if (ttsText) {
-              // p5b11 = Titel (Ansagetext), p5b12 = Interpret (leer lassen)
-              text = (key === "p5b11") ? ttsText : "";
-            }
+        if (mp && mp.state === "playing" && mp.attributes) {
+          const title = mp.attributes.media_title;
+          const artist = mp.attributes.media_artist;
+          const hasTitle = title && String(title).trim() !== "" && title !== "—";
+          const hasArtist = artist && String(artist).trim() !== "" && artist !== "—";
+          // Kein Titel UND kein Interpret -> es ist eine Ansage (TTS), kein Song
+          if (!hasTitle && !hasArtist) {
+            text = (key === "p5b11") ? "Sprachansage" : "";
           }
         }
       }
@@ -777,5 +778,5 @@
     });
   }
 
-  console.info("[openhasp-mirror-card] v1.0.0 geladen (TTS-Ansagetext)");
+  console.info("[openhasp-mirror-card] v1.0.1 geladen (TTS-Erkennung Music-Assistant)");
 })();
