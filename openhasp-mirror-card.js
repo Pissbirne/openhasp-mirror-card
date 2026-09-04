@@ -1,4 +1,5 @@
-// openhasp-mirror-card.js  v9.9
+// openhasp-mirror-card.js  v1.0.0
+// v1.0.0: TTS-Ansagetext auf Media-Seite (show_tts_text, UI-Schalter im Editor)
 // v9.9: Companion-App Fix - Container/Viewport-Messung beim Render (Fallback wenn ResizeObserver nicht feuert)
 // v9.5: Responsive canvas_size via ResizeObserver (passt sich an Handy/PC an)
 // v9.4: lock.lock action aus p4b2 entfernt (automatisches Tuerabschließen gefixt)
@@ -354,6 +355,26 @@
             rowMedia.appendChild(inpMedia);
             wrap.appendChild(rowMedia);
 
+            // TTS-Text anzeigen (Checkbox)
+            const rowTts = document.createElement("div");
+            rowTts.className = "ome-row";
+            const lblTts = document.createElement("div");
+            lblTts.className = "ome-label";
+            lblTts.textContent = "TTS-Ansagetext auf Media-Seite anzeigen";
+            const chkTts = document.createElement("input");
+            chkTts.type = "checkbox";
+            chkTts.checked = this._config.show_tts_text !== false;
+            chkTts.style.width = "18px";
+            chkTts.style.height = "18px";
+            chkTts.addEventListener("change", () => this._update("show_tts_text", chkTts.checked));
+            const hintTts = document.createElement("div");
+            hintTts.className = "ome-hint";
+            hintTts.textContent = "Zeigt den gesprochenen Text statt '-' wenn die Soundbar eine TTS-Ansage abspielt.";
+            rowTts.appendChild(lblTts);
+            rowTts.appendChild(chkTts);
+            rowTts.appendChild(hintTts);
+            wrap.appendChild(rowTts);
+
             this.appendChild(wrap);
           }
           _update(key, value) {
@@ -392,6 +413,7 @@
         entity_map: entityMap,
         canvas_size: parseInt(config.canvas_size) || 380,
         media_entity: config.media_entity || "media_player.grundig_soundbar_85b1ecde_sendspin_bt_bridge",
+        show_tts_text: config.show_tts_text !== false,
       };
       this._currentPage = 1;
       let maxP = 0;
@@ -477,6 +499,24 @@
       // 2) obj.text (z.B. label "Es hat geklingelt" oder statischer Text)
       let text = r.text;
       if (text == null || text === "") text = obj.text || null;
+
+      // TTS-Ansage auf der Media-Seite (p5b11/p5b12):
+      // Wenn der Media-Player gerade eine TTS/Announcement-Ansage spielt
+      // (kein media_title/media_artist), zeige den Ansagetext statt "-".
+      if (this._config.show_tts_text && (key === "p5b11" || key === "p5b12")) {
+        const mp = this._hass && this._hass.states && this._hass.states[this._config.media_entity];
+        if (mp && mp.attributes) {
+          const ctype = mp.attributes.media_content_type;
+          const isTts = ctype === "tts" || ctype === "announcement" || ctype === "announce";
+          if (isTts) {
+            const ttsText = mp.attributes.media_title || mp.attributes.announcement || mp.attributes.message || "";
+            if (ttsText) {
+              // p5b11 = Titel (Ansagetext), p5b12 = Interpret (leer lassen)
+              text = (key === "p5b11") ? ttsText : "";
+            }
+          }
+        }
+      }
 
       // LVGL-Sonderzeichen mappen (z.B. "BELL" -> "🔔")
       if (obj.obj === "btn" && text && LVGL_TEXT_ICONS[text]) {
@@ -737,5 +777,5 @@
     });
   }
 
-  console.info("[openhasp-mirror-card] v9.9 geladen (companion-app fix)");
+  console.info("[openhasp-mirror-card] v1.0.0 geladen (TTS-Ansagetext)");
 })();
