@@ -1,5 +1,6 @@
-// openhasp-mirror-card.js  v1.1.0
-// v1.1.0: Sprachassistent-Anzeige - HA-Logo + "Sprachassistent" wenn Assist aktiv (statt letztem Song)
+// openhasp-mirror-card.js  v1.1.1
+// v1.1.1: Assist-Erkennung auch fuer State "processing" (haerter gegen Song-Ueberschreiben)
+// v1.1.0: Sprachassistent-Anzeige - HA-Logo + "Sprachassistent" wenn Assist aktiv
 // v1.0.1: TTS-Erkennung fuer Music-Assistant-Soundbar (kein Titel/Interpret -> "Sprachansage")
 // v1.0.0: TTS-Ansagetext auf Media-Seite (show_tts_text, UI-Schalter im Editor)
 // v9.9: Companion-App Fix - Container/Viewport-Messung beim Render (Fallback wenn ResizeObserver nicht feuert)
@@ -504,7 +505,7 @@
     _isAssistActive() {
       if (!this._config.show_assist || !this._hass || !this._hass.states) return false;
       const states = this._hass.states;
-      const active = (s) => s && (s.state === "listening" || s.state === "responding");
+      const active = (s) => s && (s.state === "listening" || s.state === "processing" || s.state === "responding");
       if (this._config.assist_entity) {
         return active(states[this._config.assist_entity]);
       }
@@ -882,5 +883,5 @@
     });
   }
 
-  console.info("[openhasp-mirror-card] v1.1.0 geladen (Sprachassistent-Anzeige)");
+  console.info("[openhasp-mirror-card] v1.1.1 geladen (Sprachassistent-Anzeige)");
 })();
