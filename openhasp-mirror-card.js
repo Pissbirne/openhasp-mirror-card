@@ -1,4 +1,5 @@
-// openhasp-mirror-card.js  v1.0.1
+// openhasp-mirror-card.js  v1.1.0
+// v1.1.0: Sprachassistent-Anzeige - HA-Logo + "Sprachassistent" wenn Assist aktiv (statt letztem Song)
 // v1.0.1: TTS-Erkennung fuer Music-Assistant-Soundbar (kein Titel/Interpret -> "Sprachansage")
 // v1.0.0: TTS-Ansagetext auf Media-Seite (show_tts_text, UI-Schalter im Editor)
 // v9.9: Companion-App Fix - Container/Viewport-Messung beim Render (Fallback wenn ResizeObserver nicht feuert)
@@ -376,6 +377,26 @@
             rowTts.appendChild(hintTts);
             wrap.appendChild(rowTts);
 
+            // Sprachassistent-Anzeige (Checkbox)
+            const rowAssist = document.createElement("div");
+            rowAssist.className = "ome-row";
+            const lblAssist = document.createElement("div");
+            lblAssist.className = "ome-label";
+            lblAssist.textContent = "Sprachassistent-Anzeige (HA-Logo + Text)";
+            const chkAssist = document.createElement("input");
+            chkAssist.type = "checkbox";
+            chkAssist.checked = this._config.show_assist !== false;
+            chkAssist.style.width = "18px";
+            chkAssist.style.height = "18px";
+            chkAssist.addEventListener("change", () => this._update("show_assist", chkAssist.checked));
+            const hintAssist = document.createElement("div");
+            hintAssist.className = "ome-hint";
+            hintAssist.textContent = "Zeigt das HA-Logo + 'Sprachassistent' wenn ein Assist-Satellit aktiv ist (statt des letzten Songs).";
+            rowAssist.appendChild(lblAssist);
+            rowAssist.appendChild(chkAssist);
+            rowAssist.appendChild(hintAssist);
+            wrap.appendChild(rowAssist);
+
             this.appendChild(wrap);
           }
           _update(key, value) {
@@ -415,6 +436,12 @@
         canvas_size: parseInt(config.canvas_size) || 380,
         media_entity: config.media_entity || "media_player.grundig_soundbar_85b1ecde_sendspin_bt_bridge",
         show_tts_text: config.show_tts_text !== false,
+        // Sprachassistent-Anzeige: Wenn ein Assist-Satellit aktiv ist (listening/responding),
+        // zeigt Page 5 das HA-Logo + Text statt des zuletzt gespielten Songs.
+        assist_entity: config.assist_entity || "",
+        assist_logo: config.assist_logo || "/local/ha_logo.png",
+        assist_text: config.assist_text || "Sprachassistent",
+        show_assist: config.show_assist !== false,
       };
       this._currentPage = 1;
       let maxP = 0;
@@ -422,6 +449,15 @@
         if (item.page !== undefined) maxP = Math.max(maxP, item.page);
       }
       this._maxPage = maxP;
+      // Assist-Entity automatisch einklinken (nur plate, dort steht die Box)
+      if (!this._config.assist_entity && display === "plate") {
+        this._config.assist_entity = "assist_satellite.esp32_s3_box_3_ac212c_assist_satellit";
+      }
+      // Nur plate zeigt standardmaessig die Assist-Anzeige; bad nicht,
+      // ausser show_assist/assist_entity ist explizit gesetzt.
+      if (config.show_assist === undefined && config.assist_entity === undefined && display !== "plate") {
+        this._config.show_assist = false;
+      }
       // ResizeObserver: passt canvas_size an verfuegbare Container-Breite an
       if (!this._resizeObserver) {
         this._resizeObserver = new ResizeObserver((entries) => {
@@ -459,6 +495,26 @@
         this._dispCache = { state: disp.state, attrs: disp.attributes || {} };
       }
       this._render();
+    }
+
+    // Prueft ob ein Sprachassistent (Assist-Satellit) gerade aktiv ist.
+    // Aktiv = state "listening" oder "responding".
+    // Wenn assist_entity konfiguriert ist, wird nur diese geprueft,
+    // sonst alle assist_satellite.* Entities (Auto-Detect).
+    _isAssistActive() {
+      if (!this._config.show_assist || !this._hass || !this._hass.states) return false;
+      const states = this._hass.states;
+      const active = (s) => s && (s.state === "listening" || s.state === "responding");
+      if (this._config.assist_entity) {
+        return active(states[this._config.assist_entity]);
+      }
+      // Auto-Detect: alle assist_satellite.* Entities
+      for (const eid in states) {
+        if (eid.indexOf("assist_satellite.") === 0 && active(states[eid])) {
+          return true;
+        }
+      }
+      return false;
     }
 
     _invokeAction(action) {
@@ -676,6 +732,48 @@
       const disp = document.createElement("div");
       disp.className = "disp";
 
+      // Assist-Modus: Wenn ein Sprachassistent aktiv ist, zeigen wir auf Page 5
+      // statt des Songs das HA-Logo + "Sprachassistent".
+      const assistActive = this._isAssistActive();
+      const isMediaPage = (this._currentPage === 5);
+      if (assistActive && isMediaPage) {
+        disp.style.background = "#000000";
+
+        // HA-Logo (zentriert, gross)
+        const logoBox = document.createElement("div");
+        logoBox.style.position = "absolute";
+        logoBox.style.left = "50%";
+        logoBox.style.top = (110 * scale) + "px";
+        logoBox.style.transform = "translateX(-50%)";
+        logoBox.style.width = (200 * scale) + "px";
+        logoBox.style.height = (200 * scale) + "px";
+        logoBox.style.backgroundImage = "url(" + this._config.assist_logo + ")";
+        logoBox.style.backgroundSize = "contain";
+        logoBox.style.backgroundRepeat = "no-repeat";
+        logoBox.style.backgroundPosition = "center";
+        disp.appendChild(logoBox);
+
+        // Text "Sprachassistent"
+        const label = document.createElement("div");
+        label.style.position = "absolute";
+        label.style.left = "0";
+        label.style.top = (340 * scale) + "px";
+        label.style.width = "100%";
+        label.style.textAlign = "center";
+        label.style.color = "#41bdf5";
+        label.style.fontFamily = "'Courier New', Consolas, monospace";
+        label.style.fontWeight = "600";
+        label.style.fontSize = Math.max(14, Math.round(46 * scale)) + "px";
+        label.style.letterSpacing = "0.05em";
+        label.textContent = this._config.assist_text;
+        disp.appendChild(label);
+
+        wrap.appendChild(disp);
+        this._renderLogAndFoot(wrap, dispOnline, dispAttrs, scale);
+        this._shadow.appendChild(wrap);
+        return;
+      }
+
       // Page-Hintergrund
       const page = pages[this._currentPage] || { bg_color: "#000000", objects: [] };
       disp.style.background = page.bg_color;
@@ -735,6 +833,14 @@
 
       wrap.appendChild(disp);
 
+      this._renderLogAndFoot(wrap, dispOnline, dispAttrs, scale);
+
+      this._shadow.appendChild(wrap);
+    }
+
+    // Baut Action-Log + Footer unter dem Display (gemeinsam genutzt von
+    // Normal-Render und Assist-Render).
+    _renderLogAndFoot(wrap, dispOnline, dispAttrs, scale) {
       // Action-Log
       const log = document.createElement("div");
       log.className = "log";
@@ -754,8 +860,6 @@
         foot.textContent = "openhasp." + this._config.display + " OFFLINE";
       }
       wrap.appendChild(foot);
-
-      this._shadow.appendChild(wrap);
     }
 
     _escape(s) {
@@ -778,5 +882,5 @@
     });
   }
 
-  console.info("[openhasp-mirror-card] v1.0.1 geladen (TTS-Erkennung Music-Assistant)");
+  console.info("[openhasp-mirror-card] v1.1.0 geladen (Sprachassistent-Anzeige)");
 })();
